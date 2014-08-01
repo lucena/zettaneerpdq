@@ -1,0 +1,12 @@
+#
+# Recipe for Aerohive VM/Disk Creation
+#
+
+# First create a 10GB boot disk with the standard CentOS image.
+gcutil --project=zettaneerpdq adddisk aeroboot01 --zone=us-central1-f --source_image=centos-6
+
+# Next create a 200GB data disk.
+gcutil --project=zettaneerpdq adddisk aerodata01 --zone=us-central1-f --size_gb=200 
+
+# Now create a VM that uses both disks.
+gcutil --project=zettaneerpdq addinstance aerovm01 --disk=aeroboot01 --disk=aerodata01
