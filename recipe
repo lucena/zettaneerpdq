@@ -2,74 +2,89 @@
 # Recipe for Aerohive VM/Disk Creation
 #
 
+# Install Google Cloud SDK
+# https://developers.google.com/cloud/sdk/
+
+# Login to gcloud
+gcloud auth login
+
+# Set the project
+gcloud config set project zettaneerpdq
+
+# Set the zone
+gcloud config set compute/zone us-central1-f
+
 #
 # Create the initial disks and VM
 #
 
 # First create a 200GB data disk.
-gcutil --project=zettaneerpdq adddisk aerodata01 --zone=us-central1-f --size_gb=200 
+gcloud compute disks create aerodata03 --size=200 
 
 # Then create a VM using the CentOS image and also attaches to the data disk
-gcutil --project=zettaneerpdq addinstance aerovm01 --zone=us-central1-f --disk=aerodata01 --machine_type=n1-standard-1 --image=centos-6
+gcloud compute instances create aerovm03 --disk name=aerodata03 --machine-type n1-standard-1 --image centos-6
 
 # Connect to the vm
-gcutil --project=zettaneerpdq ssh aerovm01
+gcloud compute ssh aerovm03
 
 
 # Once on the VM, Find the disk: (should be /dev/sdb)
 ls -l /dev/disk/by-id/google-*
 
 # create the mount point
-sudo mkdir /mnt/aerodata01
+sudo mkdir /mnt/aerodata03
 
 # mount the disk and give everyone permissions to it.
-sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" /dev/sdb /mnt/aerodata01
-sudo chmod a+w /mnt/aerodata01
+sudo /usr/share/google/safe_format_and_mount -m "mkfs.ext4 -F" /dev/sdb /mnt/aerodata03
+sudo chmod a+w /mnt/aerodata03
 
 # verify it is there
 df -h
 
 # Add some data
-echo 'hello as of' `date` > /mnt/aerodata01/hello.txt
+echo 'hello as of' `date` > /mnt/aerodata03/hello.txt
 
 # Set it to remount automatically.
-echo '/dev/sdb /mnt/aerodata01 ext4 defaults,auto,noatime,noexec 0 0' | sudo tee -a /etc/fstab
+echo '/dev/sdb /mnt/aerodata03 ext4 defaults,auto,noatime,noexec 0 0' | sudo tee -a /etc/fstab
 
 # Exit and restart the instance to verify the auto mounting.
-gcutil --project=zettaneerpdq resetinstance aerovm01
+gcloud compute instances reset aerovm03
 
 
 #
 # Image Cloning
 #
 
+# Connect to the vm
+gcloud compute ssh aerovm03
+
 # Shutdown the VM
 sudo shutdown -P now
 
 # Delete the instance so you it will release access to the disks.
-gcutil --project=zettaneerpdq deleteinstance aerovm01 --zone=us-central1-f
+gcloud compute instances delete aerovm03 --keep-disks all
 
 # Create the image of the boot disk
-gcutil --project=zettaneerpdq addimage aerovmimage --source_disk=aerovm01 --zone=us-central1-f
+gcloud compute images create aerovmimage03 --source-disk=aerovm03
 
 # Create a snapshot of the data disk
-gcutil --project=zettaneerpdq addsnapshot aerosnap01 --source_disk=aerodata01
+gcloud compute disks snapshot aerodata03 --snapshot-names aerosnap03
 
-# Recreate the original aerovm01 vm instance with the original disks
-gcutil --project=zettaneerpdq addinstance aerovm01 --zone=us-central1-f --disk=aerovm01,boot --disk=aerodata01 --machine_type=n1-standard-1
+# Recreate the original vm instance with the original disks
+gcloud compute instances create aerovm03 --disk name=aerovm03 boot=yes --disk name=aerodata03 --machine-type n1-standard-1
 
 #
 # Creating a new vm instance from the disks
 #
 
-# First create the boot disk from the image
-gcutil --project=zettaneerpdq adddisk aerovm02 --zone=us-central1-f --source_image=aerovmimage 
+# First create a new boot disk from the image
+gcloud compute disks create aerovm04 --image aerovmimage03 
 
-# Next create the data disk from the snapshot
-gcutil --project=zettaneerpdq adddisk aerodata02 --zone=us-central1-f --source_snapshot=aerosnap01
+# Next create a new data disk from the snapshot
+gcloud compute disks create aerodata04 --source-snapshot aerosnap03
 
 # Create a new vm instance using the new disks
-gcutil --project=zettaneerpdq addinstance aerovm02 --zone=us-central1-f --disk=aerovm02,boot --disk=aerodata02 --machine_type=n1-standard-1
+gcloud compute instances create aerovm04 --disk name=aerovm04 boot=yes --disk name=aerodata04 --machine-type n1-standard-1
 
 
 #
